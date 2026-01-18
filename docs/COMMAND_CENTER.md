@@ -14,6 +14,21 @@ The command center is a lightweight operational dashboard served at `/dashboard`
 - The page calls `GET /admin/metrics`
 - You must provide `X-API-Key` (and optional `X-Client-Id`)
 
+## Next.js Command Center UI
+
+The full Command Center UI lives in `command-center/` (Next.js).
+
+Run it locally:
+```
+cd command-center
+npm install
+npm run dev
+```
+
+Configuration:
+- `X-API-Key` and optional `X-Client-Id` are entered in the UI
+- Set `NEXT_PUBLIC_API_BASE` if the API is hosted elsewhere
+
 ## Security
 
 Keep the dashboard behind your admin API key. Do not expose it publicly without auth.
@@ -43,13 +58,21 @@ Use this section as the single source of truth. Each update should include:
 
 | Area | Status | Last Check | Owner | Next Action | Notes |
 |------|--------|-----------|-------|-------------|-------|
-| Intake API (`/webhook/lead`) | ✅ Complete | 2026-01-17 | Core | None | Live in FastAPI |
-| Worker (jobs_queue) | ✅ Complete | 2026-01-17 | Core | None | Claim + process loop |
-| Suppression list | ✅ Complete | 2026-01-17 | Core | None | Admin endpoints + enforcement |
-| Slack notifications | 🟡 In progress | 2026-01-17 | SlackAgent | Finish external Slack integration + verify alerts | External integration in progress |
-| Command Center UI | 🟡 Basic | 2026-01-17 | UIAgent | Replace placeholder `/dashboard` with Next.js UI | FastAPI `/dashboard` live |
-| Approvals UI | ⬜ Not started | 2026-01-17 | UIAgent | Build outbox queue viewer + approve/reject | Depends on outbox queue |
-| Analytics UI | ⬜ Not started | 2026-01-17 | UIAgent | Add metrics endpoints + charts | Depends on API metrics |
+| Intake API (`/webhook/lead`) | ✅ Complete | 2026-01-18 | Core | None | Live in FastAPI |
+| Worker (jobs_queue) | ✅ Complete | 2026-01-18 | Core | None | Claim + process loop |
+| Suppression list | ✅ Complete | 2026-01-18 | Core | None | Admin endpoints + enforcement |
+| Slack notifications | 🟡 In progress | 2026-01-18 | SlackAgent | Verify delivery + wire failures/alerts | `lib/slack.py` wired; delivery unverified |
+| Command Center UI | 🟡 Basic | 2026-01-18 | UIAgent | Wire to API endpoints | Next.js scaffold exists; `/dashboard` is placeholder |
+| Approvals UI | ⬜ Not started | 2026-01-18 | UIAgent | Build outbox queue viewer + approve/reject | Depends on outbox queue |
+| Analytics UI | ⬜ Not started | 2026-01-18 | UIAgent | Add metrics endpoints + charts | Depends on API metrics |
+
+### Stubbed vs Live
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `/api/analytics/revenue` | Stubbed | Returns static 0.0 |
+| Role handlers (agency-ops) | Stubbed | Return static payloads |
+| KPI/optimization jobs | Partial | Logic exists, no scheduler wired |
 
 ---
 
@@ -57,7 +80,7 @@ Use this section as the single source of truth. Each update should include:
 
 | Layer | Technology | Why |
 |-------|------------|-----|
-| **Frontend** | Next.js 14 + React | Fast, SSR, great DX |
+| **Frontend** | Next.js + React | Fast, SSR, great DX |
 | **Styling** | Tailwind CSS | Rapid iteration |
 | **Real-time** | WebSockets / Supabase Realtime | Live updates |
 | **Charts** | Recharts or Tremor | Clean analytics |

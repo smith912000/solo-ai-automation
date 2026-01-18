@@ -5,6 +5,13 @@
 
 ---
 
+## Status Notes (Current)
+- P0 smoke test: intake/worker verified with metrics.
+- Slack alerts: code wired (`lib/slack.py`), delivery not verified.
+- SendGrid: test email failed (403) — requires permission/domain fix.
+- Outreach agent: stubs exist, API route removed from main.
+- Lead enrichment: minimal domain-only.
+
 ## TASK 1: Smoke Test Verification
 **Priority**: P0 (Blocker)  
 **Estimated Time**: 30 min

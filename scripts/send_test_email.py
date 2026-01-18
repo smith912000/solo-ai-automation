@@ -4,7 +4,16 @@ Usage:
   python scripts/send_test_email.py you@example.com
 """
 
+import os
 import sys
+
+from dotenv import load_dotenv
+
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+
+load_dotenv()
 
 from lib.email import send_email
 

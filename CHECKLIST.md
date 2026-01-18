@@ -1,9 +1,9 @@
 # Launch Checklist
 
 ## P0 — Blockers (Do First)
-- [ ] Smoke test passes locally
-- [ ] API starts without import errors
-- [ ] Worker processes jobs successfully
+- [x] Smoke test passes locally
+- [x] API starts without import errors
+- [x] Worker processes jobs successfully
 
 ## P1 — Required for Launch
 - [x] SendGrid configured and sending emails

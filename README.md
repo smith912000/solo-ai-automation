@@ -40,6 +40,38 @@ You are not a developer. You are a **System Architect & Agent Supervisor**.
 
 ---
 
+## Deployment
+
+### API (Railway)
+1. Deploy using `railway.json` + `Dockerfile`
+2. Ensure env vars are set (`SUPABASE_URL`, `SUPABASE_KEY`, `API_KEY`, `OPENAI_API_KEY`, `SENDGRID_*`)
+3. The web process is defined in `Procfile`
+
+### API (Fly.io)
+1. `fly launch` (or update `fly.toml`)
+2. `fly deploy`
+3. Set secrets via `fly secrets set`
+
+### Worker
+Run as a separate process/container:
+```bash
+python -m worker.main
+```
+
+### Outbox Sender (optional)
+```bash
+python -m worker.outbox_sender
+```
+
+### Command Center UI (Next.js)
+```bash
+cd command-center
+npm install
+npm run dev
+```
+
+Set `NEXT_PUBLIC_API_BASE` if the API runs on a different host.
+
 ## Deployment (Railway)
 
 1. **Create the API service**:

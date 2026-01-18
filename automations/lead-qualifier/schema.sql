@@ -186,6 +186,9 @@ CREATE TABLE IF NOT EXISTS jobs_queue (
     -- Job data
     lead_email TEXT NOT NULL,
     payload JSONB NOT NULL,
+    job_type TEXT DEFAULT 'lead_qualify',
+    priority INT DEFAULT 0,
+    correlation_id TEXT,
     
     -- Status
     status TEXT DEFAULT 'queued',  -- queued, processing, done, failed, dead
@@ -206,6 +209,8 @@ CREATE INDEX IF NOT EXISTS idx_jobs_queue_status ON jobs_queue(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_queue_next_run ON jobs_queue(next_run_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_queue_locked_until ON jobs_queue(locked_until);
 CREATE INDEX IF NOT EXISTS idx_jobs_queue_client_email ON jobs_queue(client_id, lead_email);
+CREATE INDEX IF NOT EXISTS idx_jobs_queue_job_type ON jobs_queue(job_type);
+CREATE INDEX IF NOT EXISTS idx_jobs_queue_priority ON jobs_queue(priority);
 
 -- =============================================================================
 -- JOBS_QUEUE CLAIM FUNCTION
@@ -309,6 +314,180 @@ DROP TRIGGER IF EXISTS update_jobs_queue_updated_at ON jobs_queue;
 CREATE TRIGGER update_jobs_queue_updated_at
     BEFORE UPDATE ON jobs_queue
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_crm_leads_updated_at ON crm_leads;
+CREATE TRIGGER update_crm_leads_updated_at
+    BEFORE UPDATE ON crm_leads
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_agent_tasks_updated_at ON agent_tasks;
+CREATE TRIGGER update_agent_tasks_updated_at
+    BEFORE UPDATE ON agent_tasks
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_voice_sessions_updated_at ON voice_sessions;
+CREATE TRIGGER update_voice_sessions_updated_at
+    BEFORE UPDATE ON voice_sessions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================================================
+-- CRM LEADS + STAGES (Agency Ops)
+-- =============================================================================
+-- Shared business pipeline tables for multi-agent orchestration.
+
+CREATE TABLE IF NOT EXISTS crm_leads (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_id UUID NOT NULL,
+    lead_id UUID REFERENCES leads(id),
+    email TEXT NOT NULL,
+    name TEXT,
+    company TEXT,
+    phone TEXT,
+    source TEXT,
+    stage TEXT DEFAULT 'prospect',  -- prospect, contacted, qualified, meeting, closed, lost
+    score INTEGER,
+    owner_agent TEXT,
+    notes TEXT,
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(client_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_crm_leads_client_stage ON crm_leads(client_id, stage);
+CREATE INDEX IF NOT EXISTS idx_crm_leads_client_score ON crm_leads(client_id, score);
+
+CREATE TABLE IF NOT EXISTS crm_stage_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_id UUID NOT NULL,
+    crm_lead_id UUID REFERENCES crm_leads(id),
+    from_stage TEXT,
+    to_stage TEXT NOT NULL,
+    changed_by TEXT,
+    reason TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_crm_stage_history_lead ON crm_stage_history(crm_lead_id);
+
+-- =============================================================================
+-- AGENT TASKS + RUNS
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS agent_tasks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_id UUID NOT NULL,
+    task_type TEXT NOT NULL,
+    status TEXT DEFAULT 'queued',  -- queued, in_progress, done, failed, cancelled
+    priority INT DEFAULT 0,
+    payload JSONB,
+    assigned_agent TEXT,
+    correlation_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_tasks_status ON agent_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_agent_tasks_client_type ON agent_tasks(client_id, task_type);
+
+CREATE TABLE IF NOT EXISTS agent_runs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_id UUID NOT NULL,
+    task_id UUID REFERENCES agent_tasks(id),
+    agent_name TEXT NOT NULL,
+    status TEXT DEFAULT 'started',  -- started, success, failed, skipped
+    input_json JSONB,
+    output_json JSONB,
+    error_message TEXT,
+    cost_estimate_usd NUMERIC(10, 4) DEFAULT 0,
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    duration_ms INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_runs_task ON agent_runs(task_id);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_agent ON agent_runs(agent_name);
+
+-- =============================================================================
+-- VOICE SESSIONS + TURNS (Web Voice)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS voice_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_id UUID NOT NULL,
+    crm_lead_id UUID REFERENCES crm_leads(id),
+    status TEXT DEFAULT 'active',  -- active, completed, failed
+    channel TEXT DEFAULT 'web',
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_voice_sessions_client ON voice_sessions(client_id);
+
+CREATE TABLE IF NOT EXISTS voice_turns (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id UUID REFERENCES voice_sessions(id),
+    role TEXT NOT NULL,  -- user, assistant, system
+    content TEXT NOT NULL,
+    action TEXT,
+    confidence NUMERIC(5, 2),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_voice_turns_session ON voice_turns(session_id);
+
+-- =============================================================================
+-- KPI SNAPSHOTS + EXPERIMENTS
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS kpi_snapshots (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_id UUID NOT NULL,
+    period_start TIMESTAMPTZ NOT NULL,
+    period_end TIMESTAMPTZ NOT NULL,
+    metrics JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_kpi_snapshots_client ON kpi_snapshots(client_id, period_start DESC);
+
+CREATE TABLE IF NOT EXISTS experiments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_id UUID NOT NULL,
+    name TEXT NOT NULL,
+    hypothesis TEXT,
+    status TEXT DEFAULT 'active',  -- active, paused, completed, cancelled
+    config JSONB,
+    results JSONB,
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_experiments_client ON experiments(client_id, status);
+
+-- =============================================================================
+-- COST EVENTS (All-in tracking)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS cost_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_id UUID NOT NULL,
+    category TEXT NOT NULL,  -- llm, email, voice, infra, human_time
+    provider TEXT,
+    automation_name TEXT,
+    run_id UUID,
+    task_id UUID,
+    quantity NUMERIC(12, 4) DEFAULT 0,
+    unit_cost_usd NUMERIC(12, 6) DEFAULT 0,
+    cost_usd NUMERIC(12, 6) DEFAULT 0,
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cost_events_client ON cost_events(client_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cost_events_category ON cost_events(category);
+CREATE INDEX IF NOT EXISTS idx_cost_events_automation ON cost_events(automation_name);
 
 -- =============================================================================
 -- ROW LEVEL SECURITY (Optional but recommended)

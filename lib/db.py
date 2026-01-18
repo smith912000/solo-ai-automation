@@ -84,17 +84,225 @@ def enqueue_job(
     lead_email: str,
     payload: dict,
     next_run_at: Optional[str] = None,
+    job_type: str = "lead_qualify",
+    priority: int = 0,
+    correlation_id: Optional[str] = None,
 ) -> dict:
     job_payload = {
         "client_id": client_id,
         "lead_email": lead_email,
         "payload": payload,
         "status": "queued",
+        "job_type": job_type,
+        "priority": priority,
     }
+    if correlation_id:
+        job_payload["correlation_id"] = correlation_id
     if next_run_at:
         job_payload["next_run_at"] = next_run_at
     response = db.table("jobs_queue").insert(job_payload).execute()
     return response.data[0]
+
+
+def create_agent_task(
+    db: Client,
+    client_id: str,
+    task_type: str,
+    payload: Optional[dict] = None,
+    priority: int = 0,
+    assigned_agent: Optional[str] = None,
+    correlation_id: Optional[str] = None,
+) -> dict:
+    task_payload = {
+        "client_id": client_id,
+        "task_type": task_type,
+        "status": "queued",
+        "priority": priority,
+        "payload": payload or {},
+    }
+    if assigned_agent:
+        task_payload["assigned_agent"] = assigned_agent
+    if correlation_id:
+        task_payload["correlation_id"] = correlation_id
+    response = db.table("agent_tasks").insert(task_payload).execute()
+    return response.data[0]
+
+
+def update_agent_task_status(db: Client, task_id: str, status: str):
+    db.table("agent_tasks").update({"status": status}).eq("id", task_id).execute()
+
+
+def record_agent_run(
+    db: Client,
+    client_id: str,
+    task_id: str,
+    agent_name: str,
+    status: str,
+    input_json: Optional[dict] = None,
+    output_json: Optional[dict] = None,
+    error_message: Optional[str] = None,
+    cost_estimate_usd: float = 0.0,
+    duration_ms: Optional[int] = None,
+):
+    payload: dict[str, Any] = {
+        "client_id": client_id,
+        "task_id": task_id,
+        "agent_name": agent_name,
+        "status": status,
+        "input_json": input_json or {},
+        "output_json": output_json or {},
+        "cost_estimate_usd": cost_estimate_usd,
+        "started_at": datetime.utcnow().isoformat(),
+    }
+    if duration_ms is not None:
+        payload["duration_ms"] = duration_ms
+        payload["completed_at"] = datetime.utcnow().isoformat()
+    if error_message:
+        payload["error_message"] = error_message
+    db.table("agent_runs").insert(payload).execute()
+
+
+def create_voice_session(
+    db: Client,
+    client_id: str,
+    crm_lead_id: Optional[str] = None,
+    metadata: Optional[dict] = None,
+    channel: str = "web",
+) -> dict:
+    payload = {
+        "client_id": client_id,
+        "channel": channel,
+        "metadata": metadata or {},
+    }
+    if crm_lead_id:
+        payload["crm_lead_id"] = crm_lead_id
+    response = db.table("voice_sessions").insert(payload).execute()
+    return response.data[0]
+
+
+def get_voice_session(db: Client, session_id: str) -> Optional[dict]:
+    response = db.table("voice_sessions").select("*").eq("id", session_id).execute()
+    if response.data:
+        return response.data[0]
+    return None
+
+
+def list_voice_turns(db: Client, session_id: str) -> list[dict]:
+    response = (
+        db.table("voice_turns")
+        .select("*")
+        .eq("session_id", session_id)
+        .order("created_at", desc=False)
+        .execute()
+    )
+    return response.data or []
+
+
+def add_voice_turn(
+    db: Client,
+    session_id: str,
+    role: str,
+    content: str,
+    action: Optional[str] = None,
+    confidence: Optional[float] = None,
+) -> dict:
+    payload: dict[str, Any] = {
+        "session_id": session_id,
+        "role": role,
+        "content": content,
+    }
+    if action:
+        payload["action"] = action
+    if confidence is not None:
+        payload["confidence"] = confidence
+    response = db.table("voice_turns").insert(payload).execute()
+    return response.data[0]
+
+
+def create_kpi_snapshot(
+    db: Client,
+    client_id: str,
+    period_start: str,
+    period_end: str,
+    metrics: dict,
+) -> dict:
+    payload = {
+        "client_id": client_id,
+        "period_start": period_start,
+        "period_end": period_end,
+        "metrics": metrics,
+    }
+    response = db.table("kpi_snapshots").insert(payload).execute()
+    return response.data[0]
+
+
+def record_cost_event(
+    db: Client,
+    client_id: str,
+    category: str,
+    cost_usd: float,
+    quantity: float = 0.0,
+    unit_cost_usd: float = 0.0,
+    provider: Optional[str] = None,
+    automation_name: Optional[str] = None,
+    run_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+    metadata: Optional[dict] = None,
+) -> dict:
+    payload: dict[str, Any] = {
+        "client_id": client_id,
+        "category": category,
+        "cost_usd": cost_usd,
+        "quantity": quantity,
+        "unit_cost_usd": unit_cost_usd,
+        "metadata": metadata or {},
+    }
+    if provider:
+        payload["provider"] = provider
+    if automation_name:
+        payload["automation_name"] = automation_name
+    if run_id:
+        payload["run_id"] = run_id
+    if task_id:
+        payload["task_id"] = task_id
+    response = db.table("cost_events").insert(payload).execute()
+    return response.data[0]
+
+
+def list_cost_events(
+    db: Client,
+    client_id: str,
+    start_at: Optional[str] = None,
+    end_at: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: int = 500,
+) -> list[dict]:
+    query = db.table("cost_events").select("*").eq("client_id", client_id)
+    if category:
+        query = query.eq("category", category)
+    if start_at:
+        query = query.gte("created_at", start_at)
+    if end_at:
+        query = query.lte("created_at", end_at)
+    response = query.order("created_at", desc=True).limit(limit).execute()
+    return response.data or []
+
+
+def update_experiment(
+    db: Client,
+    experiment_id: str,
+    status: Optional[str] = None,
+    results: Optional[dict] = None,
+):
+    payload: dict[str, Any] = {}
+    if status:
+        payload["status"] = status
+    if results is not None:
+        payload["results"] = results
+    if status in {"completed", "cancelled"}:
+        payload["completed_at"] = datetime.utcnow().isoformat()
+    if payload:
+        db.table("experiments").update(payload).eq("id", experiment_id).execute()
 
 
 def claim_next_job(db: Client, worker_id: str, lease_seconds: int) -> Optional[dict]:
@@ -359,6 +567,31 @@ def list_recent_runs(db: Client, client_id: str, limit: int = 20) -> list[dict]:
         .limit(limit)
         .execute()
     )
+    return response.data or []
+
+
+def list_crm_leads(db: Client, client_id: str, limit: int = 100) -> list[dict]:
+    response = (
+        db.table("crm_leads")
+        .select("*")
+        .eq("client_id", client_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return response.data or []
+
+
+def list_agent_runs(
+    db: Client,
+    client_id: str,
+    agent_name: Optional[str] = None,
+    limit: int = 50,
+) -> list[dict]:
+    query = db.table("agent_runs").select("*").eq("client_id", client_id)
+    if agent_name:
+        query = query.eq("agent_name", agent_name)
+    response = query.order("started_at", desc=True).limit(limit).execute()
     return response.data or []
 
 

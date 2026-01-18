@@ -61,6 +61,22 @@ class UsageRecord:
 
 
 @dataclass
+class CostEvent:
+    """Non-LLM cost event record."""
+    timestamp: datetime
+    category: str
+    client_id: str
+    cost_usd: float
+    quantity: float = 0.0
+    unit_cost_usd: float = 0.0
+    provider: Optional[str] = None
+    automation_name: Optional[str] = None
+    run_id: Optional[str] = None
+    task_id: Optional[str] = None
+    metadata: Optional[dict] = None
+
+
+@dataclass
 class CostSummary:
     """Aggregated cost summary."""
     total_tokens_in: int = 0
@@ -75,6 +91,9 @@ class CostSummary:
         self.total_cost_usd += cost
         self.run_count += 1
         self.avg_cost_per_run = self.total_cost_usd / self.run_count if self.run_count > 0 else 0
+
+    def add_cost_only(self, cost: float):
+        self.total_cost_usd += cost
 
 
 class CostTracker:
@@ -100,6 +119,7 @@ class CostTracker:
         self.db_client = db_client
         self.budget_limit_usd = budget_limit_usd or float(os.getenv("MONTHLY_BUDGET_USD", "1000"))
         self._records: list[UsageRecord] = []
+        self._events: list[CostEvent] = []
     
     def get_pricing(self, model: str) -> ModelPricing:
         """Get pricing for a model."""
@@ -139,6 +159,20 @@ class CostTracker:
         )
         
         self._records.append(record)
+        if self.db_client:
+            from lib import db as db_lib
+            db_lib.record_cost_event(
+                self.db_client,
+                client_id=client_id,
+                category="llm",
+                cost_usd=cost,
+                quantity=float(tokens_in + tokens_out),
+                unit_cost_usd=0.0,
+                provider=model,
+                automation_name=automation,
+                run_id=run_id,
+                metadata={"tokens_in": tokens_in, "tokens_out": tokens_out},
+            )
         
         # Check budget
         self._check_budget_alert()
@@ -149,6 +183,51 @@ class CostTracker:
         )
         
         return cost
+
+    def record_event(
+        self,
+        category: str,
+        client_id: str,
+        cost_usd: float,
+        quantity: float = 0.0,
+        unit_cost_usd: float = 0.0,
+        provider: Optional[str] = None,
+        automation_name: Optional[str] = None,
+        run_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        metadata: Optional[dict] = None,
+    ) -> float:
+        event = CostEvent(
+            timestamp=datetime.utcnow(),
+            category=category,
+            client_id=client_id,
+            cost_usd=cost_usd,
+            quantity=quantity,
+            unit_cost_usd=unit_cost_usd,
+            provider=provider,
+            automation_name=automation_name,
+            run_id=run_id,
+            task_id=task_id,
+            metadata=metadata or {},
+        )
+        self._events.append(event)
+        if self.db_client:
+            from lib import db as db_lib
+            db_lib.record_cost_event(
+                self.db_client,
+                client_id=client_id,
+                category=category,
+                cost_usd=cost_usd,
+                quantity=quantity,
+                unit_cost_usd=unit_cost_usd,
+                provider=provider,
+                automation_name=automation_name,
+                run_id=run_id,
+                task_id=task_id,
+                metadata=metadata or {},
+            )
+        self._check_budget_alert()
+        return cost_usd
     
     def get_daily_summary(self, date: Optional[datetime] = None) -> CostSummary:
         """Get cost summary for a day."""
@@ -160,6 +239,9 @@ class CostTracker:
         for record in self._records:
             if start <= record.timestamp < end:
                 summary.add(record.tokens_in, record.tokens_out, record.cost_usd)
+        for event in self._events:
+            if start <= event.timestamp < end:
+                summary.add_cost_only(event.cost_usd)
         
         return summary
     
@@ -171,6 +253,9 @@ class CostTracker:
         for record in self._records:
             if record.client_id == client_id and record.timestamp >= cutoff:
                 summary.add(record.tokens_in, record.tokens_out, record.cost_usd)
+        for event in self._events:
+            if event.client_id == client_id and event.timestamp >= cutoff:
+                summary.add_cost_only(event.cost_usd)
         
         return summary
     
@@ -182,6 +267,9 @@ class CostTracker:
         for record in self._records:
             if record.automation_name == automation and record.timestamp >= cutoff:
                 summary.add(record.tokens_in, record.tokens_out, record.cost_usd)
+        for event in self._events:
+            if event.automation_name == automation and event.timestamp >= cutoff:
+                summary.add_cost_only(event.cost_usd)
         
         return summary
     
@@ -194,6 +282,9 @@ class CostTracker:
         for record in self._records:
             if record.timestamp >= start:
                 total += record.cost_usd
+        for event in self._events:
+            if event.timestamp >= start:
+                total += event.cost_usd
         
         return total
     

@@ -17,6 +17,9 @@ from lib.enrichment import enrich_company
 from lib.email import send_email
 from lib.kill_switch import create_default_kill_switch, KillSwitchTriggered
 from lib.slack import send_slack_alert
+from lib.agent_router import route_job
+from lib.kpi import collect_kpi_snapshot
+from lib.experiments import evaluate_experiment, review_optimization
 
 logger = logging.getLogger(__name__)
 
@@ -384,6 +387,47 @@ def process_payload(
 
 
 def process_job(job: dict) -> dict:
+    job_type = job.get("job_type") or "lead_qualify"
+    if job_type == "kpi_snapshot":
+        db = db_lib.get_supabase_client()
+        payload = job.get("payload") or {}
+        return collect_kpi_snapshot(
+            db,
+            client_id=job.get("client_id"),
+            period_start=payload.get("period_start"),
+            period_end=payload.get("period_end"),
+        )
+    if job_type == "cost_snapshot":
+        db = db_lib.get_supabase_client()
+        payload = job.get("payload") or {}
+        return collect_kpi_snapshot(
+            db,
+            client_id=job.get("client_id"),
+            period_start=payload.get("period_start"),
+            period_end=payload.get("period_end"),
+        )
+    if job_type == "optimization_review":
+        db = db_lib.get_supabase_client()
+        payload = job.get("payload") or {}
+        max_cost_usd = payload.get("max_cost_usd")
+        max_cost_per_run = payload.get("max_cost_per_run")
+        return review_optimization(
+            db,
+            client_id=job.get("client_id"),
+            period_hours=int(payload.get("period_hours", 24)),
+            max_cost_usd=max_cost_usd,
+            max_cost_per_run=max_cost_per_run,
+        )
+    if job_type == "experiment_evaluate":
+        db = db_lib.get_supabase_client()
+        payload = job.get("payload") or {}
+        experiment_id = payload.get("experiment_id")
+        if not experiment_id:
+            raise ValueError("experiment_id is required for experiment_evaluate jobs")
+        return evaluate_experiment(db, experiment_id, results=payload.get("results"))
+    if job_type != "lead_qualify":
+        db = db_lib.get_supabase_client()
+        return route_job(db, job)
     payload = job.get("payload") or {}
     client_id = job.get("client_id")
     run_id = payload.get("run_id")
