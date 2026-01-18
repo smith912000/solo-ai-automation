@@ -1,0 +1,529 @@
+{
+    "name": "Lead Qualifier Automation",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "lead",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "webhook-trigger",
+            "name": "Webhook Trigger",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1.1,
+            "position": [
+                250,
+                300
+            ],
+            "webhookId": "lead-qualifier"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{ $json.email }}",
+                            "operation": "isNotEmpty"
+                        }
+                    ]
+                }
+            },
+            "id": "validate-input",
+            "name": "Validate Input",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                450,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ {\"error\": \"Missing required field: email\", \"status\": \"validation_failed\"} }}",
+                "options": {
+                    "responseCode": 400
+                }
+            },
+            "id": "validation-error",
+            "name": "Validation Error",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                650,
+                450
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "// Compute idempotency key\nconst crypto = require('crypto');\n\nconst email = $input.first().json.email || '';\nconst timestamp = $input.first().json.timestamp || '';\nconst source = $input.first().json.source || '';\n\nconst keyInput = `${email}:${timestamp}:${source}`;\nconst idempotencyKey = crypto.createHash('sha256').update(keyInput).digest('hex').substring(0, 32);\n\nreturn {\n  ...($input.first().json),\n  idempotency_key: idempotencyKey,\n  processed_at: new Date().toISOString()\n};"
+            },
+            "id": "compute-idempotency",
+            "name": "Compute Idempotency Key",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                650,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "select",
+                "schema": "public",
+                "table": "runs",
+                "filterType": "string",
+                "filterString": "idempotency_key=eq.{{ $json.idempotency_key }}",
+                "limit": 1
+            },
+            "id": "check-duplicate",
+            "name": "Check Duplicate Run",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                850,
+                300
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "SUPABASE_CREDENTIAL_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "number": [
+                        {
+                            "value1": "={{ $json.length }}",
+                            "operation": "equal",
+                            "value2": 0
+                        }
+                    ]
+                }
+            },
+            "id": "is-new-run",
+            "name": "Is New Run?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                1050,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ {\"status\": \"skipped\", \"reason\": \"duplicate_run\", \"idempotency_key\": $('Compute Idempotency Key').first().json.idempotency_key} }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "id": "duplicate-response",
+            "name": "Duplicate Response",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                1250,
+                450
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "upsert",
+                "schema": "public",
+                "table": "leads",
+                "upsertColumns": "client_id,email",
+                "dataMode": "columns",
+                "columnsToSend": {
+                    "mappings": [
+                        {
+                            "column": "client_id",
+                            "value": "={{ $env.DEFAULT_CLIENT_ID || '00000000-0000-0000-0000-000000000001' }}"
+                        },
+                        {
+                            "column": "email",
+                            "value": "={{ $('Compute Idempotency Key').first().json.email }}"
+                        },
+                        {
+                            "column": "name",
+                            "value": "={{ $('Compute Idempotency Key').first().json.name }}"
+                        },
+                        {
+                            "column": "company",
+                            "value": "={{ $('Compute Idempotency Key').first().json.company }}"
+                        },
+                        {
+                            "column": "website",
+                            "value": "={{ $('Compute Idempotency Key').first().json.website }}"
+                        },
+                        {
+                            "column": "source",
+                            "value": "={{ $('Compute Idempotency Key').first().json.source }}"
+                        },
+                        {
+                            "column": "raw_form_data",
+                            "value": "={{ JSON.stringify($('Compute Idempotency Key').first().json) }}"
+                        }
+                    ]
+                }
+            },
+            "id": "upsert-lead",
+            "name": "Upsert Lead",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                1250,
+                300
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "SUPABASE_CREDENTIAL_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $env.AGENT_API_URL || 'http://localhost:8000' }}/qualify",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "name",
+                            "value": "={{ $('Compute Idempotency Key').first().json.name }}"
+                        },
+                        {
+                            "name": "email",
+                            "value": "={{ $('Compute Idempotency Key').first().json.email }}"
+                        },
+                        {
+                            "name": "company",
+                            "value": "={{ $('Compute Idempotency Key').first().json.company }}"
+                        },
+                        {
+                            "name": "website",
+                            "value": "={{ $('Compute Idempotency Key').first().json.website }}"
+                        },
+                        {
+                            "name": "message",
+                            "value": "={{ $('Compute Idempotency Key').first().json.message }}"
+                        },
+                        {
+                            "name": "source",
+                            "value": "={{ $('Compute Idempotency Key').first().json.source }}"
+                        },
+                        {
+                            "name": "client_id",
+                            "value": "={{ $env.DEFAULT_CLIENT_ID || '00000000-0000-0000-0000-000000000001' }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "timeout": 60000
+                }
+            },
+            "id": "call-agent",
+            "name": "Call Qualification Agent",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1450,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "insert",
+                "schema": "public",
+                "table": "runs",
+                "dataMode": "columns",
+                "columnsToSend": {
+                    "mappings": [
+                        {
+                            "column": "client_id",
+                            "value": "={{ $env.DEFAULT_CLIENT_ID || '00000000-0000-0000-0000-000000000001' }}"
+                        },
+                        {
+                            "column": "idempotency_key",
+                            "value": "={{ $('Compute Idempotency Key').first().json.idempotency_key }}"
+                        },
+                        {
+                            "column": "lead_email",
+                            "value": "={{ $('Compute Idempotency Key').first().json.email }}"
+                        },
+                        {
+                            "column": "automation_name",
+                            "value": "lead-qualifier"
+                        },
+                        {
+                            "column": "trigger_type",
+                            "value": "webhook"
+                        },
+                        {
+                            "column": "trigger_payload",
+                            "value": "={{ JSON.stringify($('Compute Idempotency Key').first().json) }}"
+                        },
+                        {
+                            "column": "status",
+                            "value": "={{ $json.status }}"
+                        },
+                        {
+                            "column": "steps_json",
+                            "value": "={{ JSON.stringify($json.steps || []) }}"
+                        },
+                        {
+                            "column": "llm_tokens_in",
+                            "value": "={{ $json.total_tokens || 0 }}"
+                        },
+                        {
+                            "column": "cost_estimate_usd",
+                            "value": "={{ $json.estimated_cost_usd || 0 }}"
+                        },
+                        {
+                            "column": "duration_ms",
+                            "value": "={{ $json.duration_ms || 0 }}"
+                        },
+                        {
+                            "column": "completed_at",
+                            "value": "={{ new Date().toISOString() }}"
+                        }
+                    ]
+                }
+            },
+            "id": "log-run",
+            "name": "Log Run",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                1650,
+                300
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "SUPABASE_CREDENTIAL_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{ $('Call Qualification Agent').first().json.status }}",
+                            "operation": "equals",
+                            "value2": "success"
+                        }
+                    ]
+                }
+            },
+            "id": "check-success",
+            "name": "Check Success",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                1850,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "webhookUri": "={{ $env.SLACK_WEBHOOK_URL }}",
+                "text": "=🎯 *New Lead Qualified*\n\n*Email:* {{ $('Compute Idempotency Key').first().json.email }}\n*Company:* {{ $('Compute Idempotency Key').first().json.company || 'Unknown' }}\n*Score:* {{ $('Call Qualification Agent').first().json.qualification?.score || 'N/A' }}\n*Label:* {{ $('Call Qualification Agent').first().json.qualification?.label || 'N/A' }}\n*Email Status:* {{ $('Call Qualification Agent').first().json.email_status || 'N/A' }}\n\n_Run ID: {{ $('Call Qualification Agent').first().json.run_id }}_"
+            },
+            "id": "notify-slack",
+            "name": "Notify Slack",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.1,
+            "position": [
+                2050,
+                250
+            ],
+            "credentials": {
+                "slackApi": {
+                    "id": "SLACK_CREDENTIAL_ID",
+                    "name": "Slack"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $('Call Qualification Agent').first().json }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "id": "success-response",
+            "name": "Success Response",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2250,
+                250
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ {\"status\": \"failed\", \"error\": $('Call Qualification Agent').first().json.error, \"run_id\": $('Call Qualification Agent').first().json.run_id} }}",
+                "options": {
+                    "responseCode": 500
+                }
+            },
+            "id": "error-response",
+            "name": "Error Response",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2050,
+                400
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Validate Input",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Validate Input": {
+            "main": [
+                [
+                    {
+                        "node": "Compute Idempotency Key",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Validation Error",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Compute Idempotency Key": {
+            "main": [
+                [
+                    {
+                        "node": "Check Duplicate Run",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Duplicate Run": {
+            "main": [
+                [
+                    {
+                        "node": "Is New Run?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Is New Run?": {
+            "main": [
+                [
+                    {
+                        "node": "Upsert Lead",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Duplicate Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Upsert Lead": {
+            "main": [
+                [
+                    {
+                        "node": "Call Qualification Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Call Qualification Agent": {
+            "main": [
+                [
+                    {
+                        "node": "Log Run",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Log Run": {
+            "main": [
+                [
+                    {
+                        "node": "Check Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Success": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Slack",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Error Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Notify Slack": {
+            "main": [
+                [
+                    {
+                        "node": "Success Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 0,
+    "updatedAt": "2024-01-01T00:00:00.000Z",
+    "versionId": "1"
+}
