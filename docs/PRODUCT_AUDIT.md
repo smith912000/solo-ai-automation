@@ -23,7 +23,7 @@
 | **Lead Qualifier Agent** | 90% | ✅ Fully Functional |
 | **Outreach Agent** | 75% | 🟡 Expanded recently |
 | **Social Media & Content** | 25% | 🟡 Basic posting built |
-| **Voice Agent** | 35% | � Scripts + expanded routes |
+| **Voice Agent** | 60% | 🟢 Vapi integrated |
 | **Agency Ops** | 15% | 🔴 Stubs only |
 | **Command Center UI** | 60% | 🟡 Components enhanced |
 | **Business Operations** | 85% | ✅ Docs ready |
