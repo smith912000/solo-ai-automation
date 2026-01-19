@@ -1,9 +1,15 @@
 import os
+import logging
 from dataclasses import dataclass
 from typing import Optional
 
+import requests
+
 from lib import db as db_lib
 from lib.training import build_sales_prompt
+from .scripts import build_call_script
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -22,8 +28,99 @@ def place_call(phone_number: str, script: str, metadata: Optional[dict] = None) 
     if not provider:
         return CallResult(status="skipped", summary="VOICE_PROVIDER not configured")
 
-    # Placeholder for external API integration.
-    return CallResult(status="queued", call_id="voice-call-placeholder")
+    metadata = metadata or {}
+    script = script or build_call_script(metadata.get("name"), metadata.get("company"))
+
+    client_id = metadata.get("client_id")
+    session_id = None
+    if client_id:
+        session = create_session(client_id=client_id, crm_lead_id=metadata.get("lead_id"), metadata=metadata)
+        session_id = session.get("id")
+
+    api_url = None
+    api_key = None
+    provider = provider.lower()
+    if provider == "vapi":
+        api_url = os.getenv("VAPI_API_URL")
+        api_key = os.getenv("VAPI_API_KEY")
+    elif provider == "bland":
+        api_url = os.getenv("BLAND_API_URL")
+        api_key = os.getenv("BLAND_API_KEY")
+    else:
+        api_url = os.getenv("VOICE_API_URL")
+        api_key = os.getenv("VOICE_API_KEY")
+    if not api_url or not api_key:
+        return CallResult(status="error", summary="Voice provider API not configured")
+
+    if session_id:
+        metadata["session_id"] = session_id
+
+    # Build provider-specific payload
+    if provider == "vapi":
+        # Vapi expects: phoneNumberId, customer.number, and assistant config
+        payload = {
+            "customer": {
+                "number": phone_number,
+            },
+            "assistant": {
+                "firstMessage": script,
+                "model": {
+                    "provider": "openai",
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": script
+                        }
+                    ]
+                },
+                "voice": {
+                    "provider": "11labs",
+                    "voiceId": "21m00Tcm4TlvDq8ikWAM"  # Rachel voice
+                }
+            },
+            "metadata": metadata,
+        }
+    else:
+        payload = {
+            "to": phone_number,
+            "script": script,
+            "metadata": metadata,
+            "provider": provider,
+        }
+
+    try:
+        response = requests.post(
+            api_url,
+            json=payload,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json() if response.content else {}
+        call_id = data.get("call_id") or data.get("id") or "voice-call"
+        if session_id:
+            db_lib.add_voice_turn(
+                db_lib.get_supabase_client(),
+                session_id,
+                role="system",
+                content=f"Call queued via {provider}",
+                action="call_queued",
+                confidence=1.0,
+            )
+        return CallResult(status="queued", call_id=call_id, summary="Call queued")
+    except Exception as exc:
+        logger.error("Voice provider call failed: %s", exc)
+        if session_id:
+            db_lib.add_voice_turn(
+                db_lib.get_supabase_client(),
+                session_id,
+                role="system",
+                content=f"Call failed: {exc}",
+                action="call_failed",
+                confidence=0.2,
+            )
+        return CallResult(status="error", summary=str(exc))
 
 
 def create_session(
