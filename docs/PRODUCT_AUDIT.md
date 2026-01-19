@@ -1,17 +1,17 @@
 # Solo AI Automation — Product Audit
 
 > **Goal**: Actualized AI automation business ready to provide services
-> **Status Date**: January 19, 2026
+> **Status Date**: January 19, 2026 (Updated)
 
 ---
 
-## Overall Completion: **68%** 🟡
+## Overall Completion: **72%** �
 
 ```
-████████████████████░░░░░░░░░░ 68%
+████████████████████████████░░░░ 72%
 ```
 
-**Core platform ready, but social media and content creation services need building.** Lead qualification and email outreach are production-ready. Remaining 32% includes social media integrations and content automation services.
+**Core platform production-ready. Social media and content creation partially built.** Lead qualification, email outreach, and basic social posting are functional. Voice calling and full content automation still need work.
 
 ---
 
@@ -21,11 +21,11 @@
 |----------|------------|--------|
 | **Core Infrastructure** | 95% | ✅ Production Ready |
 | **Lead Qualifier Agent** | 90% | ✅ Fully Functional |
-| **Outreach Agent** | 70% | 🟡 Usable, needs polish |
-| **Voice Agent** | 25% | 🔴 Stub only |
-| **Social Media & Content** | 0% | 🔴 Not built |
+| **Outreach Agent** | 70% | � Usable, needs polish |
+| **Social Media & Content** | 25% | 🟡 Basic posting built |
+| **Voice Agent** | 30% | 🔴 Scripts exist, no provider |
 | **Agency Ops** | 15% | 🔴 Stubs only |
-| **Command Center UI** | 55% | 🟡 Structure exists, needs UI |
+| **Command Center UI** | 55% | � Structure exists, needs UI |
 | **Business Operations** | 85% | ✅ Docs + templates ready |
 | **Integrations** | 100% | ✅ All verified working |
 | **Testing** | 75% | 🟢 Good coverage |
@@ -38,9 +38,9 @@
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| API Server (FastAPI) | ✅ | 9 route modules, deployed to Railway |
+| API Server (FastAPI) | ✅ | 10 route modules, deployed to Railway |
 | Worker Process | ✅ | 499 lines, job queue processing, Slack alerts |
-| Database Layer | ✅ | 47 functions in `lib/db.py`, Supabase client works |
+| Database Layer | ✅ | **59 functions** in `lib/db.py` (892 lines) |
 | Job Queue | ✅ | `jobs_queue` with SKIP LOCKED claiming |
 | Kill Switch | ✅ | `lib/kill_switch.py` with multi-trigger safety |
 | Cost Tracker | ✅ | `lib/cost_tracker.py` (11KB) with budgets |
@@ -50,8 +50,8 @@
 | Environment Config | ✅ | `.env` with 20+ variables configured |
 
 **What's missing** (5%):
-- [ ] Redis for priority queues (currently Postgres-only)
-- [ ] WebSocket for real-time dashboard updates
+- [ ] Redis for priority queues
+- [ ] WebSocket for real-time updates
 
 ---
 
@@ -65,10 +65,8 @@
 | Approval queue | ✅ | `outbox_emails` table + API |
 | Duplicate detection | ✅ | Idempotency key hashing |
 | Email suppression | ✅ | Suppression list management |
-| Email cooldown | ✅ | Configurable days between emails |
 | n8n workflow | ✅ | `n8n-workflow.json` (18KB) |
-| Schema | ✅ | `schema.sql` (17KB) - 12 tables |
-| RUNBOOK | ✅ | Deployment + ops guide |
+| CRM integration | ✅ | `upsert_crm_lead`, `update_crm_stage` |
 
 **What's missing** (10%):
 - [ ] Lead enrichment beyond domain scraping
@@ -82,64 +80,59 @@
 |---------|--------|-------|
 | Cold emailer core | ✅ | `cold_emailer.py` uses OpenAI |
 | API route | ✅ | `POST /outreach/draft` works |
-| Config | ✅ | Base config exists |
-| Sequence management | ❌ | No multi-step follow-ups yet |
-| LinkedIn integration | ❌ | Planned but not built |
-| Prospect scraping | ❌ | Scout agent not built |
-
-**To complete**:
-- Build multi-step email sequences with timing
-- Add prospect discovery (Scout agent)
+| Scout (prospect discovery) | 🟡 | Stub with hardcoded data |
+| Sequence management | ❌ | No multi-step follow-ups |
+| LinkedIn outreach | ❌ | Planned but not built |
 
 ---
 
-### 4. Voice Agent — 25% 🔴
+### 4. Social Media & Content — 25% 🟡
 
-| Feature | Status | Notes |
-|---------|--------|-------|
+> ⚠️ **Partially Built** — Basic structure exists, needs platform connections.
+
+| Feature | Status | File |
+|---------|--------|------|
+| Content generation | ✅ | `generate_post()` in `social-content/agent/main.py` |
+| Twitter publishing | 🟡 | Code exists, needs API keys |
+| LinkedIn publishing | 🟡 | Code exists, needs API keys |
+| Content calendar | ✅ | `create_content_calendar()` in db.py |
+| Social posts queue | ✅ | `create_social_post()`, `list_social_posts()` |
+| API routes | ✅ | `/social/calendar`, `/social/posts` |
+| Instagram | ❌ | Not built |
+| Facebook | ❌ | Not built |
+| TikTok | ❌ | Not built |
+| Image generation | ❌ | Not built |
+| Post scheduling worker | ❌ | Job type exists, worker logic needed |
+
+**To complete**:
+- Add Twitter/LinkedIn API keys to `.env`
+- Implement `social_publish` job type in worker
+- Add Meta (Instagram/Facebook) integration
+- Add image generation (DALL-E)
+
+---
+
+### 5. Voice Agent — 30% 🔴
+
+| Feature | Status | File |
+|---------|--------|------|
 | Database tables | ✅ | `voice_sessions`, `voice_turns` |
 | API routes | ✅ | `api/routes/voice.py` scaffolded |
 | Session management | ✅ | Create/get/add turns |
-| Actual voice provider | ❌ | No Vapi/Bland.ai integration |
-| Call scripts | ❌ | Not built |
+| Call scripts | ✅ | `scripts.py` with `build_call_script()` |
+| Voice provider integration | ❌ | No Vapi/Bland.ai connected |
 | Live calling | ❌ | Not implemented |
 
-**Blocked on**: Choosing and integrating voice AI provider (Vapi, Bland.ai, or Twilio)
-
----
-
-### 5. Social Media & Content Creation — 0% 🔴
-
-> ⚠️ **Major Gap**: No social media or content creation automation exists yet.
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Instagram integration | ❌ | Not built |
-| Facebook/Meta integration | ❌ | Not built |
-| Twitter/X integration | ❌ | Not built |
-| TikTok integration | ❌ | Not built |
-| LinkedIn posting | ❌ | Only profile extraction exists |
-| Content calendar | ❌ | Not built |
-| AI content generation | ❌ | Not built |
-| Image/video generation | ❌ | Not built |
-| Post scheduling | ❌ | Not built |
-| Analytics aggregation | ❌ | Not built |
-
-**To build this service offering**:
-- Choose social media APIs (Meta Business, Twitter API, LinkedIn Marketing)
-- Build content generation with OpenAI/Claude
-- Integrate image generation (DALL-E, Midjourney API)
-- Create scheduling and calendar system
-- Add analytics dashboard
+**To complete**: Choose and integrate Vapi, Bland.ai, or Twilio
 
 ---
 
 ### 6. Agency Ops — 15% 🔴
 
-| Module | Status | File |
-|--------|--------|------|
-| `sales.py` | 🟡 Stub | Basic sales prompt builder |
-| `support.py` | 🟡 Stub | Basic support response |
+| Module | Status | Notes |
+|--------|--------|-------|
+| `sales.py` | 🟡 Stub | Uses training prompts |
+| `support.py` | 🟡 Stub | Basic response builder |
 | `growth.py` | 🟡 Stub | Experiment placeholder |
 | `proposal_builder.py` | 🟡 Stub | Not implemented |
 | `account_manager.py` | 🟡 Stub | Not implemented |
@@ -148,9 +141,8 @@
 | `finance_ops.py` | 🟡 Stub | Not implemented |
 | `qa_review.py` | 🟡 Stub | Not implemented |
 | `ops.py` | 🟡 Stub | Not implemented |
-| `scout.py` | 🟡 Stub | Returns hardcoded prospects |
 
-**11 stub files exist** — structure is there but no real functionality.
+**11 stub files** — structure exists but no real functionality.
 
 ---
 
@@ -158,37 +150,29 @@
 
 | View | Status | Notes |
 |------|--------|-------|
-| `/app/page.tsx` | ✅ | Main dashboard exists (2KB) |
-| `/app/agents/` | ✅ | Agent management view |
+| `/app/page.tsx` | ✅ | Main dashboard |
+| `/app/agents/` | ✅ | Agent management |
 | `/app/analytics/` | ✅ | Analytics view |
 | `/app/approvals/` | ✅ | Email approval queue |
-| `/app/pipeline/` | ✅ | Lead pipeline view |
-| `/app/components/` | ✅ | Shared components |
-| Styling | 🟡 | Basic CSS, not polished |
-| API integration | 🟡 | Backend routes exist, needs connection |
-| Real-time updates | ❌ | No WebSocket yet |
-
-**Structure is there**, but needs frontend polish and API wiring.
+| `/app/pipeline/` | ✅ | Lead pipeline |
+| Styling | 🟡 | Basic CSS |
+| API integration | 🟡 | Needs wiring |
 
 ---
 
 ### 8. Business Operations — 85% ✅
 
-| Asset | Status | Purpose |
-|-------|--------|---------|
-| [BUSINESS_MODEL.md](file:///C:/Users/freez/.gemini/antigravity/scratch/solo-ai-automation/docs/BUSINESS_MODEL.md) | ✅ | 3 viable business models defined |
-| [VISION.md](file:///C:/Users/freez/.gemini/antigravity/scratch/solo-ai-automation/docs/VISION.md) | ✅ | 4-phase scaling roadmap |
-| [30_DAY_LAUNCH_PLAN.md](file:///C:/Users/freez/.gemini/antigravity/scratch/solo-ai-automation/ops/30_DAY_LAUNCH_PLAN.md) | ✅ | Detailed launch checklist |
-| [DAILY_WORKFLOW.md](file:///C:/Users/freez/.gemini/antigravity/scratch/solo-ai-automation/ops/DAILY_WORKFLOW.md) | ✅ | Operations playbook |
-| [PRICING_CALCULATOR.md](file:///C:/Users/freez/.gemini/antigravity/scratch/solo-ai-automation/ops/PRICING_CALCULATOR.md) | ✅ | Cost/pricing model |
-| [CLIENT_CONTRACT.md](file:///C:/Users/freez/.gemini/antigravity/scratch/solo-ai-automation/templates/CLIENT_CONTRACT.md) | ✅ | Ready-to-use contract |
-| [ONBOARDING_CHECKLIST.md](file:///C:/Users/freez/.gemini/antigravity/scratch/solo-ai-automation/templates/ONBOARDING_CHECKLIST.md) | ✅ | Client onboarding steps |
-| [ONE_PAGER.md](file:///C:/Users/freez/.gemini/antigravity/scratch/solo-ai-automation/assets/ONE_PAGER.md) | ✅ | Sales collateral |
-| [TERMS_OF_SERVICE.md](file:///C:/Users/freez/.gemini/antigravity/scratch/solo-ai-automation/assets/TERMS_OF_SERVICE.md) | ✅ | Legal terms |
-
-**What's missing** (15%):
-- [ ] Case studies (need first clients)
-- [ ] Demo video/walkthrough
+| Asset | Status |
+|-------|--------|
+| BUSINESS_MODEL.md | ✅ |
+| VISION.md | ✅ |
+| 30_DAY_LAUNCH_PLAN.md | ✅ |
+| DAILY_WORKFLOW.md | ✅ |
+| PRICING_CALCULATOR.md | ✅ |
+| CLIENT_CONTRACT.md | ✅ |
+| ONBOARDING_CHECKLIST.md | ✅ |
+| ONE_PAGER.md | ✅ |
+| TERMS_OF_SERVICE.md | ✅ |
 
 ---
 
@@ -196,110 +180,48 @@
 
 | Integration | Status | Verified |
 |-------------|--------|----------|
-| **Supabase** (Database) | ✅ | Tested via worker |
-| **SendGrid** (Email) | ✅ | Verified today - 202 response |
-| **Slack** (Alerts) | ✅ | Verified today - message delivered |
-| **OpenAI** (LLM) | ✅ | Used in qualifier + emailer |
-| **Railway** (Deploy) | ✅ | Both services online |
-| **GitHub** (CI/CD) | ✅ | Auto-deploy on push |
+| Supabase | ✅ | Tested |
+| SendGrid | ✅ | 202 response |
+| Slack | ✅ | Message delivered |
+| OpenAI | ✅ | Used in qualifier |
+| Railway | ✅ | Both services online |
+| GitHub | ✅ | Auto-deploy |
 
 ---
 
 ### 10. Testing — 75% 🟢
 
-| Test File | Coverage |
-|-----------|----------|
-| `test_intake.py` | ✅ Lead intake webhook |
-| `test_worker.py` | ✅ Job processing |
-| `test_admin.py` | ✅ Admin endpoints |
-| `test_parsing.py` | ✅ Data parsing |
-| `test_command_center_api.py` | ✅ Dashboard API |
-
-**5 test files** with good coverage of core paths.
-
-**What's missing** (25%):
-- [ ] End-to-end integration tests
-- [ ] Voice agent tests
-- [ ] Load/stress tests
+5 test files covering intake, worker, admin, parsing, and command center API.
 
 ---
 
-## What You Can Do NOW
+## What's Ready NOW
 
-### ✅ Ready to Sell
-1. **Lead qualification service** — Fully functional
-2. **Email outreach drafting** — AI-powered, approval queue
-3. **Usage-based billing support** — Cost tracking built in
-4. **Slack notifications** — Real-time alerts working
-5. **Client onboarding** — Templates + contract ready
-
-### 🎯 Recommended First Offer
-> "I automate **lead qualification and follow-up** for **B2B companies** saving **20+ hours/week**."
-
-**Pricing suggestion** (from your business model):
-- Starter: $500/month (lead qual only)
-- Growth: $1,000/month (qual + outreach)
-- Pro: $2,000/month (full pipeline + priority)
+| Service | Status | Confidence |
+|---------|--------|------------|
+| **Lead Qualification** | ✅ Ready | High |
+| **Email Outreach** | ✅ Ready | High |
+| **Basic Social Posting** | 🟡 Partial | Medium (needs API keys) |
+| **Voice Calling** | 🔴 Not ready | Low |
+| **Full Content Automation** | 🔴 Not ready | Low |
 
 ---
 
-## Priority Roadmap to 100%
+## Priority Roadmap
 
-### Phase 1: First Client (This Week)
+### This Week
 | Task | Impact | Effort |
 |------|--------|--------|
-| Polish Command Center UI | High | 4-6 hours |
-| Create demo walkthrough | High | 2 hours |
-| Acquire first client | **Critical** | Ongoing |
+| Add Twitter/LinkedIn API keys | High | 1 hour |
+| Implement social_publish in worker | High | 2 hours |
+| First client | **Critical** | Ongoing |
 
-### Phase 2: AI Sales Pipeline (Next 2 Weeks)
+### Next 2 Weeks
 | Task | Impact | Effort |
 |------|--------|--------|
-| Build email sequences | Medium | 4 hours |
-| Add prospect Scout agent | High | 8 hours |
-| Integrate LinkedIn scraping | Medium | 6 hours |
-
-### Phase 3: Voice & Scale (Month 2)
-| Task | Impact | Effort |
-|------|--------|--------|
-| Integrate Vapi/Bland.ai | High | 8 hours |
-| Build AI call scripts | High | 6 hours |
-| Add Redis priority queue | Medium | 4 hours |
-| WebSocket real-time | Medium | 6 hours |
-
----
-
-## The Bootstrap Strategy
-
-> You will **use the same platform you're selling** to acquire customers.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                                                              │
-│    YOUR PLATFORM                                            │
-│         │                                                   │
-│         ▼                                                   │
-│   ┌───────────┐                                             │
-│   │  Scout    │ ──► Find B2B companies needing automation  │
-│   └─────┬─────┘                                             │
-│         ▼                                                   │
-│   ┌───────────┐                                             │
-│   │ Qualifier │ ──► Score and prioritize leads             │
-│   └─────┬─────┘                                             │
-│         ▼                                                   │
-│   ┌───────────┐                                             │
-│   │ Outreach  │ ──► AI-drafted personalized emails         │
-│   └─────┬─────┘                                             │
-│         ▼                                                   │
-│   ┌───────────┐                                             │
-│   │   YOU     │ ──► Close deals, onboard clients           │
-│   └───────────┘                                             │
-│         │                                                   │
-│         ▼                                                   │
-│   CLIENTS USE SAME PLATFORM                                 │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
+| Add Instagram/Facebook | High | 6 hours |
+| Voice AI provider (Vapi) | High | 8 hours |
+| Polish Command Center | Medium | 4 hours |
 
 ---
 
@@ -307,21 +229,19 @@
 
 | Metric | Value |
 |--------|-------|
-| **Lines of Code** | ~5,000+ |
-| **Database Tables** | 12 |
-| **API Endpoints** | 20+ |
+| **Lines of Code** | ~6,000+ |
+| **Database Functions** | 59 |
+| **API Endpoints** | 25+ |
 | **AI Agents** | 2 functional, 12 stubs |
-| **Documentation** | 9 strategy docs |
+| **Social Platforms** | 2 partial (Twitter, LinkedIn) |
+| **Docs** | 10 strategy files |
 | **Templates** | 4 client-ready |
-| **Social Media** | 0 integrations |
-| **Tests** | 5 files |
 | **Deployment** | ✅ Production |
 
-### Verdict: **Launch-Ready for Lead Services at 68%**
+### Verdict: **Launch-Ready at 72%**
 
-The platform is **ready to sell lead qualification and email outreach services**. However, if you want to offer social media management and content creation as part of your service packages, those components need to be built.
+**Immediate revenue**: Lead qualification + email outreach
+**Near-term** (1 week): Social media posting with API keys
+**Blocked**: Voice calling, Instagram/Facebook, full content automation
 
-**Immediate revenue potential**: Lead qualification + email outreach
-**Blocked services**: Social media management, content creation, voice calling
-
-**Next action**: Either (1) launch with lead/email services only, or (2) build social media integrations before launch.
+**Recommended**: Launch with lead services now, add social as you acquire first client.
