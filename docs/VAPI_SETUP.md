@@ -15,8 +15,9 @@
 
 ### 1. Phone Number (Required for Outbound)
 - [ ] Go to **Phone Numbers** → **Buy Number**
-- [ ] Choose a US number (+1) for business calls
-- [ ] Cost: ~$2/month per number
+- [ ] Choose a **UK number (+44)** for business calls
+- [ ] Alternatively: Get both UK (+44) and US (+1) if calling international clients
+- [ ] Cost: ~$2-5/month per number
 - [ ] Note the **Phone Number ID** for API calls
 
 ### 2. Create Assistant
